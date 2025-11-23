@@ -31,6 +31,7 @@ DWORD WINAPI ServerHandler(LPVOID serverClass) {
       case 0:
         if (!show1) {
           MessageBox(NULL, "Connected first user", "Success", MB_OK);
+          send(el.first, "COM1", 4, NULL);
           show1 = true;
         }
 
@@ -39,6 +40,7 @@ DWORD WINAPI ServerHandler(LPVOID serverClass) {
       case 1:
         if (!show2) {
           MessageBox(NULL, "Connected second user", "Success", MB_OK);
+          send(el.first, "COM2", 4, NULL);
           show2 = true;
         }
         break;
