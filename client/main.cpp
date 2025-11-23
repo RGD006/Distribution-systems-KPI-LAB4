@@ -32,7 +32,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine,
 
   RegisterClass(&wc);
 
-  HWND hwnd = CreateWindowEx(0, CLASS_NAME, "Win32 Window Base",
+  HWND hwnd = CreateWindowEx(0, CLASS_NAME, "Client",
                              WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
                              800, 600, nullptr, nullptr, hInstance, nullptr);
 
