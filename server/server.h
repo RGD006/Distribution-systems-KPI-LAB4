@@ -1,26 +1,28 @@
 #pragma once
 
 #define WIN32_LEAN_AND_MEAN
-#define NOMINMAX     
+#define NOMINMAX
 
-#include <winsock2.h> 
-#include <ws2tcpip.h>
-#include <windows.h> 
 #include <map>
+#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
 constexpr LPCSTR DEFAULT_PORT = "27015";
 
 class Server {
 private:
-  std::map<int, SOCKET> connections;
+  std::map<SOCKET, size_t> connections;
   WSADATA socketServer;
   SOCKET listenSocket;
-  HANDLE mainHandle;
-  struct addrinfo hints;
+  HANDLE connectionHandle;
+  HANDLE serverHandle;
+  SOCKADDR_IN addr;
 
 public:
   Server();
   void run();
   void stop();
-  friend DWORD WINAPI ServerHandle(LPVOID serverClass);
+  friend DWORD WINAPI ServerConnectionHandler(LPVOID serverClass);
+  friend DWORD WINAPI ServerHandler(LPVOID serverClass);
 };

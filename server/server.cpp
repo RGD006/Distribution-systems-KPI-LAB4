@@ -1,47 +1,94 @@
 #include "server.h"
+#include <string>
 
-DWORD WINAPI ServerHandle(LPVOID serverClass) {
+constexpr size_t numberOfConnections = 100;
+
+DWORD WINAPI ServerConnectionHandler(LPVOID serverClass) {
   Server *server = reinterpret_cast<Server *>(serverClass);
+  int clientSize = sizeof(server->addr);
+
+  for (size_t i = 0; i < numberOfConnections; i++) {
+    SOCKET clientSocket =
+        accept(server->listenSocket, (SOCKADDR *)&server->addr, &clientSize);
+    if (clientSocket == INVALID_SOCKET) {
+      continue;
+    }
+
+    int clientId = static_cast<int>(server->connections.size());
+    server->connections[clientSocket] = i;
+  }
+
+  return 0;
+}
+
+DWORD WINAPI ServerHandler(LPVOID serverClass) {
+  Server *server = reinterpret_cast<Server *>(serverClass);
+  bool show1 = false, show2 = false;
+
+  while (1) {
+    for (auto &el : server->connections) {
+      switch (el.second) {
+      case 0:
+        if (!show1) {
+          MessageBox(NULL, "Connected first user", "Success", MB_OK);
+          show1 = true;
+        }
+
+        break;
+
+      case 1:
+        if (!show2) {
+          MessageBox(NULL, "Connected second user", "Success", MB_OK);
+          show2 = true;
+        }
+        break;
+
+      default:
+        break;
+      }
+    }
+  }
 
   return 0;
 }
 
 Server::Server() {
-  struct addrinfo *result;
-  int iResult = WSAStartup(MAKEWORD(2, 2), &socketServer);
-
-  if (iResult != 0) {
+  if (WSAStartup(MAKEWORD(2, 2), &socketServer) != 0) {
     MessageBox(NULL, "Can't startup WSADATA", "ERROR", MB_ICONERROR);
     exit(1);
   }
 
-  ZeroMemory(&hints, sizeof(hints));
-  hints.ai_family = AF_INET;
-  hints.ai_socktype = SOCK_STREAM;
-  hints.ai_protocol = IPPROTO_TCP;
-  hints.ai_flags = AI_PASSIVE;
-  iResult = getaddrinfo(NULL, DEFAULT_PORT, &hints, &result);
+  ZeroMemory(&addr, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(1111);
+  addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-  if (iResult != 0) {
-    MessageBox(NULL, "getaddrinfo failed", "ERROR", MB_ICONERROR);
+  listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (listenSocket == INVALID_SOCKET) {
+    MessageBox(NULL, "Error creating listen socket", "ERROR", MB_ICONERROR);
     WSACleanup();
     exit(1);
   }
 
-  listenSocket =
-      socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+  if (bind(listenSocket, (SOCKADDR *)&addr, sizeof(addr)) == SOCKET_ERROR) {
+    MessageBox(NULL, "Bind failed", "ERROR", MB_ICONERROR);
+    closesocket(listenSocket);
+    WSACleanup();
+    exit(1);
+  }
 
-  if (listenSocket == INVALID_SOCKET) {
-    printf("Error at socket(): %ld\n", WSAGetLastError());
-    MessageBox(NULL, "Error create listen socket", "ERROR", MB_ICONERROR);
-    freeaddrinfo(result);
+  if (listen(listenSocket, SOMAXCONN) == SOCKET_ERROR) {
+    MessageBox(NULL, "Listen failed", "ERROR", MB_ICONERROR);
+    closesocket(listenSocket);
     WSACleanup();
     exit(1);
   }
 }
 
 void Server::run() {
-  mainHandle = CreateThread(NULL, 0, ServerHandle, this, 0, NULL);
+  connectionHandle =
+      CreateThread(NULL, 0, ServerConnectionHandler, this, 0, NULL);
+  serverHandle = CreateThread(NULL, 0, ServerHandler, this, 0, NULL);
 }
 
-void Server::stop() { CloseHandle(mainHandle); }
+void Server::stop() { CloseHandle(connectionHandle); }

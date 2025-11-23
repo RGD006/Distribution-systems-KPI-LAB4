@@ -1,5 +1,5 @@
 #define WIN32_LEAN_AND_MEAN
-#define NOMINMAX     
+#define NOMINMAX
 #include <WinSock2.h>
 #include <windows.h>
 
@@ -35,14 +35,35 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine,
 
   RegisterClass(&wc);
 
-  HWND hwnd = CreateWindowEx(0, CLASS_NAME, "Client",
-                             WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
-                             800, 600, nullptr, nullptr, hInstance, nullptr);
+  HWND hwnd = CreateWindowEx(0, CLASS_NAME, "Client", WS_OVERLAPPEDWINDOW,
+                             CW_USEDEFAULT, CW_USEDEFAULT, 800, 600, nullptr,
+                             nullptr, hInstance, nullptr);
 
   if (!hwnd)
     return 0;
 
   ShowWindow(hwnd, nCmdShow);
+
+  
+  WSAData wsaData;
+  WORD DLLVersion = MAKEWORD(2, 2);
+
+  if (WSAStartup(DLLVersion, &wsaData) != 0) {
+    MessageBox(hwnd, "WSAStartup failed", "Error", MB_ICONERROR);
+    return 1;
+  }
+
+  SOCKADDR_IN addr;
+  int sizeofaddr = sizeof(addr);
+  addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+  addr.sin_port = htons(1111);
+  addr.sin_family = AF_INET;
+
+  SOCKET connection = socket(AF_INET, SOCK_STREAM, NULL);
+  if (connect(connection, (SOCKADDR *)&addr, sizeof(addr)) != 0) {
+    MessageBox(hwnd, "Can't connect to client", "Error", MB_ICONERROR);
+    return 1;
+  }
 
   MSG msg = {};
   while (GetMessage(&msg, nullptr, 0, 0)) {
