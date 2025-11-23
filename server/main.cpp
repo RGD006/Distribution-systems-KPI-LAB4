@@ -1,7 +1,9 @@
-#include <windows.h>
+#define WIN32_LEAN_AND_MEAN
+#include "server.h"
 
 // Имя класса окна
 LPCSTR CLASS_NAME = "SampleWindowClass";
+Server mainServer;
 
 // Процедура обработки сообщений окна
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam,
@@ -40,6 +42,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine,
     return 0;
 
   ShowWindow(hwnd, nCmdShow);
+  mainServer.run();
 
   MSG msg = {};
   while (GetMessage(&msg, nullptr, 0, 0)) {
