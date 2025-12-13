@@ -3,7 +3,13 @@
 #include <iostream>
 #include <string>
 
-std::array<LPCTSTR, 2> fileNames = {TEXT("sample_file1"), TEXT("sample_file2")};
+using PIPE = std::pair<LPCSTR, HANDLE>;
+
+constexpr size_t pipeNumber = 2;
+std::array<PIPE, pipeNumber> pipes = {
+  std::make_pair(TEXT("\\\\.\\pipe\\pipe1"), nullptr),
+  std::make_pair(TEXT("\\\\.\\pipe\\pipe2"), nullptr),
+};
 
 int main(int argc, char **argv) {
   unsigned int client = 0;
@@ -21,18 +27,19 @@ int main(int argc, char **argv) {
       std::cout << "Wrong client number" << std::endl;
   }
 
-  HANDLE hFile = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, fileNames[client]);
+  pipes[client].second = CreateFile(pipes[client].first, GENERIC_READ | GENERIC_WRITE,
+                                    0, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
 
-  if (!hFile) {
-    std::cout << "Can't create file handler: " << GetLastError() << std::endl;
+  if (pipes[client].second == INVALID_HANDLE_VALUE) {
+    std::printf("Can't open pipe %s (%lu)\n", pipes[client].first, GetLastError());
     return -1;
   }
 
-  PVOID pBuf = MapViewOfFile(hFile, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+  std::string message("Hello from pipe " + std::to_string(client + 1));
 
-  std::string message("message from: " + std::to_string(client) + " mailbox");
-
-  CopyMemory(pBuf, message.c_str(), message.size());
+  if (!WriteFile(pipes[client].second, message.c_str(), message.size(), nullptr, nullptr)) {
+    std::printf("Can't write to pipe: %lu\n", GetLastError());
+  }
 
   return 0;
 }

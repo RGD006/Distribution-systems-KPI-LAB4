@@ -7,36 +7,42 @@
 #include <vector>
 #include <windows.h>
 
-constexpr size_t fileBufferSize = 512;
-constexpr char *empty = "";
+static constexpr size_t pipeBufferSize = 512;
+static constexpr size_t pipeNumber = 2;
+static constexpr size_t pipeTimeoutMs = 5000;
+// static constexpr char *empty = "";
 
-std::vector<HANDLE> tFile;
-std::vector<HANDLE> hFileMaps;
-std::array<HANDLE, 2> hFile;
-std::array<LPCTSTR, 2> fileNames = {TEXT("sample_file1"), TEXT("sample_file2")};
+using PIPE = std::pair<LPCSTR, HANDLE>;
 
-static DWORD WINAPI ListenFileMap(LPVOID fileObject) {
-  auto file = *reinterpret_cast<HANDLE *>(fileObject);
+std::array<HANDLE, pipeNumber> tPipes;
+std::array<PIPE, pipeNumber> pipes = {
+  std::make_pair(TEXT("\\\\.\\pipe\\pipe1"), nullptr),
+  std::make_pair(TEXT("\\\\.\\pipe\\pipe2"), nullptr),
+};
 
-  if (!file) {
-    std::cout << "Can't find file" << std::endl;
-    return -1;
-  }
+static DWORD WINAPI ListenPipe(PVOID pPipe) {
+  const auto pipe = *reinterpret_cast<PIPE*>(pPipe);
+  DWORD cbRead;
+  char buff[pipeBufferSize];
 
-  LPVOID buff;
+  std::printf("Wait for connect to %s pipe\n", pipe.first);
 
-  buff = MapViewOfFile(file, FILE_MAP_ALL_ACCESS, 0, 0, 0);
-
+  ConnectNamedPipe(pipe.second, nullptr);
+  
   while (1) {
-    if (!buff) {
-      continue;
-    }
-
-    if (strlen(LPCSTR(buff)) > 0) {
-      std::cout << "Message in file: " << LPCSTR(buff) << " "
-                << strlen(LPCSTR(buff)) << std::endl;
-
-      CopyMemory(buff, empty, fileBufferSize);
+    BOOL success = ReadFile(pipe.second, buff, sizeof(buff), &cbRead, nullptr);
+    
+    if (success) {
+      std::printf("Message from (%s): <%s>\n", pipe.first, buff);
+    } else {
+      switch (GetLastError()) {
+        case 109:
+          std::printf("Connection is closed\n");
+          return 0;
+        default:
+          std::printf("ReadFile Erorr: %lu\n", GetLastError());
+          return 1;
+      }
     }
   }
 
@@ -44,32 +50,31 @@ static DWORD WINAPI ListenFileMap(LPVOID fileObject) {
 }
 
 Server::Server() {
-  for (size_t iHandle = 0; iHandle < fileNames.size(); iHandle++) {
+  for (size_t i = 0; i < pipeNumber; i++) {
+    pipes[i].second = CreateNamedPipe(pipes[i].first, 
+                                PIPE_ACCESS_DUPLEX,
+                                PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
+                                PIPE_UNLIMITED_INSTANCES,
+                                pipeBufferSize, pipeBufferSize, pipeTimeoutMs, nullptr);
 
-    HANDLE hMap =
-        CreateFileMapping(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0,
-                          fileBufferSize, fileNames[iHandle]);
-
-    if (!hMap) {
-      std::cout << "CreateFileMapping error: " << GetLastError() << std::endl;
-      exit(1);
+    if (pipes[i].second == INVALID_HANDLE_VALUE) {
+      std::printf("Can't create pipe %s (%lu) \n", pipes[i].first, GetLastError());
     }
-
-    hFileMaps.push_back(hMap);
-
-    tFile.push_back(CreateThread(nullptr, 4096, ListenFileMap,
-                                 &hFileMaps[iHandle], 0, nullptr));
-
-    std::cout << "Create fileMap: " << fileNames[iHandle] << std::endl;
   }
 }
 
 void Server::run() {
-  std::cout << "Listen fileMaps for 10 seconds" << std::endl;
+  std::printf("Listen Pipes for 10 seconds\n");
+
+  for (size_t i = 0; i < pipeNumber; i++) {
+    tPipes[i] = CreateThread(nullptr, 4096, ListenPipe, &pipes[i], 0, nullptr);
+  }
+
   Sleep(10 * 1000);
 
-  for (auto &filemaps : tFile) {
-    TerminateThread(filemaps, 0);
+
+  for (auto &task : tPipes) {
+    TerminateThread(task, 0);
   }
 }
 
